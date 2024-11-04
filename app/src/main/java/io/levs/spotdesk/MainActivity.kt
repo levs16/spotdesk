@@ -102,9 +102,513 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideIn
+import androidx.compose.animation.slideOut
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import android.widget.Toast
+
+// Add these before class MainActivity
+enum class EditableElement {
+    FONT_STYLE,
+    CONTROLS_STYLE
+}
+
+@Composable
+fun EditableWrapper(
+    isEditMode: Boolean,
+    element: EditableElement,
+    selectedElement: EditableElement?,
+    onSelect: (EditableElement?) -> Unit,
+    settings: Any,
+    onSettingsChange: (Any) -> Unit,
+    content: @Composable () -> Unit
+) {
+    Box {
+        Box(
+            modifier = Modifier
+                .then(
+                    if (isEditMode) {
+                        Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .border(
+                                width = 1.dp,
+                                color = Color.White.copy(
+                                    alpha = if (selectedElement == element) 0.8f else 0.3f
+                                ),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .padding(8.dp)
+                            .clickable { onSelect(element) }
+                    } else Modifier
+                )
+        ) {
+            content()
+        }
+    }
+}
+
+@Composable
+private fun FrostedGlassBackground(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .background(
+                Color.Black.copy(alpha = 0.5f),
+                RoundedCornerShape(16.dp)
+            )
+            .then(
+                Modifier.border(
+                    width = 0.5.dp,
+                    color = Color.White.copy(alpha = 0.2f),
+                    shape = RoundedCornerShape(16.dp)
+                )
+            )
+    )
+}
+
+@Composable
+private fun EditMenu(
+    selectedElement: EditableElement,
+    settings: Any,
+    onSettingsChange: (Any) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { onDismiss() }
+    ) {
+        // iOS-style frosted glass effect menu
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .width(360.dp)
+                .align(Alignment.CenterEnd)
+                .background(
+                    Color(0xFF1C1C1E).copy(alpha = 0.7f), // More transparent background
+                    RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp)
+                )
+                .border(
+                    width = 0.5.dp,
+                    color = Color.White.copy(alpha = 0.2f),
+                    shape = RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp)
+                )
+        ) {
+            // Enhanced blur overlay
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.15f),
+                                Color.White.copy(alpha = 0.05f),
+                                Color.White.copy(alpha = 0.1f)
+                            )
+                        )
+                    )
+            )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp)
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+            ) {
+                // Header
+                Text(
+                    text = when (selectedElement) {
+                        EditableElement.FONT_STYLE -> "Font & Color"
+                        EditableElement.CONTROLS_STYLE -> "Controls Style"
+                    },
+                    color = Color.White,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(bottom = 24.dp)
+                )
+
+                when (selectedElement) {
+                    EditableElement.FONT_STYLE -> {
+                        val textSettings = settings as TextStyleSettings
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(24.dp)
+                        ) {
+                            // Size slider with iOS style
+                            IOSStyleSlider(
+                                label = "Size",
+                                value = textSettings.fontSize,
+                                onValueChange = {
+                                    onSettingsChange(textSettings.copy(fontSize = it))
+                                }
+                            )
+
+                            // Weight selector with iOS style
+                            IOSStyleSegmentedControl<FontWeight>(
+                                label = "Weight",
+                                options = listOf(
+                                    FontWeight.Light to "Light",
+                                    FontWeight.Normal to "Regular",
+                                    FontWeight.Medium to "Medium",
+                                    FontWeight.Bold to "Bold"
+                                ),
+                                selectedOption = textSettings.fontWeight,
+                                onOptionSelected = {
+                                    onSettingsChange(textSettings.copy(fontWeight = it))
+                                }
+                            )
+
+                            // Opacity slider with iOS style
+                            IOSStyleSlider(
+                                label = "Opacity",
+                                value = textSettings.opacity,
+                                onValueChange = {
+                                    onSettingsChange(textSettings.copy(opacity = it))
+                                }
+                            )
+                        }
+                    }
+
+                    EditableElement.CONTROLS_STYLE -> {
+                        val controlSettings = settings as ControlsStyleSettings
+
+                        Column(verticalArrangement = Arrangement.spacedBy(32.dp)) {
+                            // Size Slider
+                            IOSStyleSlider(
+                                label = "Size",
+                                value = controlSettings.size,
+                                onValueChange = {
+                                    onSettingsChange(controlSettings.copy(size = it))
+                                }
+                            )
+
+                            // Button Style
+                            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                Text(
+                                    text = "Button Style",
+                                    color = Color.White.copy(alpha = 0.7f),
+                                    fontSize = 15.sp
+                                )
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    ControlStyle.values().forEach { style ->
+                                        Text(
+                                            text = when(style) {
+                                                ControlStyle.FILLED -> "Filled"
+                                                ControlStyle.OUTLINED -> "Outlined"
+                                                ControlStyle.MINIMAL -> "Minimal"
+                                            },
+                                            fontSize = 14.sp,
+                                            color = Color.White.copy(
+                                                alpha = if (controlSettings.style == style) 1f else 0.5f
+                                            ),
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(
+                                                    if (controlSettings.style == style)
+                                                        Color(0xFF48484A)
+                                                    else Color(0xFF3A3A3C)
+                                                )
+                                                .clickable {
+                                                    onSettingsChange(controlSettings.copy(style = style))
+                                                }
+                                                .padding(vertical = 12.dp),
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Icon Style
+                            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                Text(
+                                    text = "Icon Style",
+                                    color = Color.White.copy(alpha = 0.7f),
+                                    fontSize = 15.sp
+                                )
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    IconStyle.values().forEach { style ->
+                                        Text(
+                                            text = when(style) {
+                                                IconStyle.REGULAR -> "Regular"
+                                                IconStyle.ROUNDED -> "Rounded"
+                                                IconStyle.SHARP -> "Sharp"
+                                            },
+                                            fontSize = 14.sp,
+                                            color = Color.White.copy(
+                                                alpha = if (controlSettings.iconStyle == style) 1f else 0.5f
+                                            ),
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(
+                                                    if (controlSettings.iconStyle == style)
+                                                        Color(0xFF48484A)
+                                                    else Color(0xFF3A3A3C)
+                                                )
+                                                .clickable {
+                                                    onSettingsChange(controlSettings.copy(iconStyle = style))
+                                                }
+                                                .padding(vertical = 12.dp),
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Corner Radius
+                            IOSStyleSlider(
+                                label = "Corner Radius",
+                                value = controlSettings.cornerRadius,
+                                onValueChange = {
+                                    onSettingsChange(controlSettings.copy(cornerRadius = it))
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun IOSStyleSlider(
+    label: String,
+    value: Float,
+    onValueChange: (Float) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = label,
+            color = Color.White,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.Medium
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Slider(
+                value = value,
+                onValueChange = { onValueChange((it).coerceIn(0.5f, 2f)) },
+                valueRange = 0.5f..2f,
+                modifier = Modifier.weight(1f),
+                colors = SliderDefaults.colors(
+                    thumbColor = Color.White,
+                    activeTrackColor = Color.White,
+                    inactiveTrackColor = Color.White.copy(alpha = 0.3f)
+                )
+            )
+
+            Text(
+                text = String.format("%.1f", value),
+                color = Color.White.copy(alpha = 0.6f),
+                fontSize = 15.sp,
+                modifier = Modifier.width(32.dp),
+                textAlign = TextAlign.End
+            )
+        }
+    }
+}
+
+@Composable
+private fun <T> IOSStyleSegmentedControl(
+    label: String,
+    options: List<Pair<T, String>>,
+    selectedOption: T,
+    onOptionSelected: (T) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = label,
+            color = Color.White,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.Medium
+        )
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(36.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(
+                    Color(0xFF2C2C2E).copy(alpha = 0.7f),
+                    RoundedCornerShape(8.dp)
+                )
+                .border(
+                    width = 0.5.dp,
+                    color = Color.White.copy(alpha = 0.2f),
+                    shape = RoundedCornerShape(8.dp)
+                )
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                options.forEach { (option, label) ->
+                    val isSelected = selectedOption == option
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = label,
+                            fontSize = 14.sp,
+                            color = Color.White.copy(alpha = if (isSelected) 1f else 0.6f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(
+                                    if (isSelected) Color(0xFF48484A).copy(alpha = 0.7f)
+                                    else Color.Transparent
+                                )
+                                .clickable { onOptionSelected(option) }
+                                .padding(horizontal = 8.dp, vertical = 8.dp),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WeightSelector(
+    selected: FontWeight,
+    onSelected: (FontWeight) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = "Weight",
+            color = Color.White.copy(alpha = 0.7f),
+            fontSize = 15.sp
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            listOf(
+                FontWeight.Light to "Light",
+                FontWeight.Normal to "Regular",
+                FontWeight.Medium to "Medium",
+                FontWeight.Bold to "Bold"
+            ).forEach { (weight, label) ->
+                Text(
+                    text = label,
+                    fontSize = 15.sp,
+                    color = Color.White.copy(alpha = if (selected == weight) 1f else 0.5f),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            if (selected == weight)
+                                Color.White.copy(alpha = 0.2f)
+                            else Color.Transparent
+                        )
+                        .clickable { onSelected(weight) }
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StyleSelector(
+    selected: ControlStyle,
+    onSelected: (ControlStyle) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = "Style",
+            color = Color.White.copy(alpha = 0.7f),
+            fontSize = 15.sp
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ControlStyle.values().forEach { style ->
+                Text(
+                    text = style.name.lowercase().capitalize(),
+                    fontSize = 15.sp,
+                    color = Color.White.copy(alpha = if (selected == style) 1f else 0.5f),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            if (selected == style)
+                                Color.White.copy(alpha = 0.2f)
+                            else Color.Transparent
+                        )
+                        .clickable { onSelected(style) }
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                )
+            }
+        }
+    }
+}
+
+// Add these data classes to store style settings
+data class TextStyleSettings(
+    val fontSize: Float = 1f, // multiplier for base size
+    val fontWeight: FontWeight = FontWeight.Bold,
+    val opacity: Float = 1f
+)
+
+data class ControlsStyleSettings(
+    val size: Float = 1f,
+    val style: ControlStyle = ControlStyle.FILLED,
+    val iconStyle: IconStyle = IconStyle.REGULAR,
+    val cornerRadius: Float = 1f
+)
+
+enum class ControlStyle {
+    FILLED, OUTLINED, MINIMAL
+}
+
+enum class IconStyle {
+    REGULAR, ROUNDED, SHARP
+}
 
 class MainActivity : ComponentActivity() {
     private val viewModel: PlayerViewModel by viewModels()
@@ -203,7 +707,20 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun MainScreen() {
+        // State variables
+        var editModeUnlocked by remember { mutableStateOf(false) }
+        var selectedElement by remember { mutableStateOf<EditableElement?>(null) }
+        var textSettings by remember { mutableStateOf(TextStyleSettings()) }
+        var controlsSettings by remember { mutableStateOf(ControlsStyleSettings()) }
         var isAODMode by remember { mutableStateOf(false) }
+        var isEditMode by remember { mutableStateOf(false) }
+
+        // Easter egg tap tracking
+        var albumArtTapCount by remember { mutableStateOf(0) }
+        var lastTapTime by remember { mutableStateOf(0L) }
+        val tapTimeout = 3000L // Reset tap count after 3 seconds
+        val requiredTaps = 10
+
         val playerState by viewModel.playerState.collectAsState()
         val albumArt by viewModel.albumArtBitmap.collectAsState()
         val backgroundState = rememberDynamicBackground(
@@ -212,48 +729,48 @@ class MainActivity : ComponentActivity() {
             audioSessionId = playerState.audioSessionId
         )
 
-        // Enhanced fade and scale animations
-        val transition = updateTransition(targetState = isAODMode, label = "AODTransition")
+        // AOD transition
+        val aodTransition = updateTransition(targetState = isAODMode, label = "AODTransition")
 
-        val mainAlpha by transition.animateFloat(
-            transitionSpec = {
-                tween(
-                    durationMillis = 400,
-                    easing = FastOutSlowInEasing
-                )
-            },
+        // Edit mode transition
+        val editTransition = updateTransition(targetState = isEditMode, label = "EditTransition")
+
+        // AOD animations
+        val mainAlpha by aodTransition.animateFloat(
+            transitionSpec = { tween(400, easing = FastOutSlowInEasing) },
             label = "mainAlpha"
         ) { isAOD -> if (isAOD) 0f else 1f }
 
-        val mainScale by transition.animateFloat(
-            transitionSpec = {
-                tween(
-                    durationMillis = 400,
-                    easing = FastOutSlowInEasing
-                )
-            },
+        val mainScale by aodTransition.animateFloat(
+            transitionSpec = { tween(400, easing = FastOutSlowInEasing) },
             label = "mainScale"
         ) { isAOD -> if (isAOD) 1.1f else 1f }
 
-        val aodAlpha by transition.animateFloat(
-            transitionSpec = {
-                tween(
-                    durationMillis = 400,
-                    easing = FastOutSlowInEasing
-                )
-            },
+        val aodAlpha by aodTransition.animateFloat(
+            transitionSpec = { tween(400, easing = FastOutSlowInEasing) },
             label = "aodAlpha"
         ) { isAOD -> if (isAOD) 1f else 0f }
 
-        val aodScale by transition.animateFloat(
-            transitionSpec = {
-                tween(
-                    durationMillis = 400,
-                    easing = FastOutSlowInEasing
-                )
-            },
+        val aodScale by aodTransition.animateFloat(
+            transitionSpec = { tween(400, easing = FastOutSlowInEasing) },
             label = "aodScale"
         ) { isAOD -> if (isAOD) 1f else 0.9f }
+
+        // Edit mode animations
+        val editScale by editTransition.animateFloat(
+            transitionSpec = {
+                spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessLow
+                )
+            },
+            label = "editScale"
+        ) { editing -> if (editing) 0.9f else 1f }
+
+        val editOverlayAlpha by editTransition.animateFloat(
+            transitionSpec = { tween(300) },
+            label = "editOverlayAlpha"
+        ) { editing -> if (editing) 1f else 0f }
 
         Box(
             modifier = Modifier
@@ -261,30 +778,34 @@ class MainActivity : ComponentActivity() {
                 .background(Color.Black)
                 .pointerInput(Unit) {
                     detectTapGestures(
-                        onDoubleTap = { isAODMode = !isAODMode },
-                        onTap = { if (isAODMode) isAODMode = false }
+                        onLongPress = {
+                            if (editModeUnlocked && !isAODMode) {
+                                isEditMode = !isEditMode
+                                selectedElement = null
+                            }
+                        },
+                        onDoubleTap = { if (!isEditMode) isAODMode = !isAODMode },
+                        onTap = {
+                            when {
+                                isEditMode && selectedElement != null -> selectedElement = null
+                                isEditMode -> isEditMode = false
+                                isAODMode -> isAODMode = false
+                            }
+                        }
                     )
                 }
         ) {
+            // Main content with combined scale effects
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
                         alpha = mainAlpha
-                        scaleX = mainScale
-                        scaleY = mainScale
+                        scaleX = mainScale * editScale
+                        scaleY = mainScale * editScale
+                        transformOrigin = TransformOrigin(0.5f, 0.5f)
                     }
                     .dynamicBackground(backgroundState.value)
-            )
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        alpha = mainAlpha
-                        scaleX = mainScale
-                        scaleY = mainScale
-                    }
             ) {
                 Box(
                     modifier = Modifier
@@ -307,33 +828,47 @@ class MainActivity : ComponentActivity() {
                                 modifier = Modifier
                                     .fillMaxHeight()
                             ) {
-                                Text(
-                                    text = playerState.title,
-                                    fontSize = 32.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                    lineHeight = 40.sp,
-                                    modifier = Modifier
-                                        .padding(end = 16.dp)
-                                        .windowInsetsPadding(
-                                            WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom)
+                                EditableWrapper(
+                                    isEditMode = isEditMode,
+                                    element = EditableElement.FONT_STYLE,
+                                    selectedElement = selectedElement,
+                                    onSelect = { selectedElement = it },
+                                    settings = textSettings,
+                                    onSettingsChange = { textSettings = it as TextStyleSettings }
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = playerState.title,
+                                            fontSize = 32.sp * textSettings.fontSize,
+                                            fontWeight = textSettings.fontWeight,
+                                            letterSpacing = 0.sp,
+                                            color = Color.White,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                            lineHeight = 40.sp,
+                                            modifier = Modifier
+                                                .padding(end = 16.dp)
+                                                .windowInsetsPadding(
+                                                    WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom)
+                                                )
                                         )
-                                )
 
-                                Text(
-                                    text = playerState.artist,
-                                    fontSize = 24.sp,
-                                    color = Color.White.copy(alpha = 0.7f),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier
-                                        .padding(end = 16.dp)
-                                        .windowInsetsPadding(
-                                            WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom)
+                                        Text(
+                                            text = playerState.artist,
+                                            fontSize = 24.sp * textSettings.fontSize,
+                                            fontWeight = textSettings.fontWeight,
+                                            letterSpacing = 0.sp,
+                                            color = Color.White.copy(alpha = textSettings.opacity * 0.7f),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier
+                                                .padding(end = 16.dp)
+                                                .windowInsetsPadding(
+                                                    WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom)
+                                                )
                                         )
-                                )
+                                    }
+                                }
                             }
 
                             Column(
@@ -350,28 +885,31 @@ class MainActivity : ComponentActivity() {
                                     modifier = Modifier
                                         .width(IntrinsicSize.Min)
                                         .padding(end = 32.dp),
-                                    horizontalArrangement = Arrangement.Start,
+                                    horizontalArrangement = Arrangement.spacedBy(16.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     AnimatedControlButton(
                                         icon = Icons.Rounded.SkipPrevious,
                                         contentDescription = "Previous",
                                         onClick = { viewModel.skipToPrevious() },
-                                        size = 44.dp
+                                        baseSize = 44.dp,
+                                        controlSettings = controlsSettings
                                     )
 
-                                    PlayPauseButton(
-                                        isPlaying = playerState.isPlaying,
+                                    AnimatedControlButton(
+                                        icon = if (playerState.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                        contentDescription = if (playerState.isPlaying) "Pause" else "Play",
                                         onClick = { viewModel.playPause() },
-                                        size = 56.dp,
-                                        modifier = Modifier.padding(horizontal = 24.dp)
+                                        baseSize = 56.dp,
+                                        controlSettings = controlsSettings
                                     )
 
                                     AnimatedControlButton(
                                         icon = Icons.Rounded.SkipNext,
                                         contentDescription = "Next",
                                         onClick = { viewModel.skipToNext() },
-                                        size = 44.dp
+                                        baseSize = 44.dp,
+                                        controlSettings = controlsSettings
                                     )
                                 }
 
@@ -412,6 +950,23 @@ class MainActivity : ComponentActivity() {
                                 .width(340.dp)
                                 .aspectRatio(1f)
                                 .clip(RoundedCornerShape(16.dp))
+                                .clickable {
+                                    val currentTime = System.currentTimeMillis()
+                                    if (currentTime - lastTapTime > tapTimeout) {
+                                        albumArtTapCount = 1
+                                    } else {
+                                        albumArtTapCount++
+                                        if (albumArtTapCount >= requiredTaps && !editModeUnlocked) {
+                                            editModeUnlocked = true
+                                            Toast.makeText(
+                                                this@MainActivity,
+                                                "Edit mode unlocked! Long press anywhere to edit.",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                        }
+                                    }
+                                    lastTapTime = currentTime
+                                }
                         ) {
                             albumArt?.let { art ->
                                 Image(
@@ -426,6 +981,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            // AOD Screen
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -435,7 +991,7 @@ class MainActivity : ComponentActivity() {
                         scaleY = aodScale
                     }
             ) {
-                if (isAODMode || aodAlpha > 0f) {  // Keep AOD mounted during animation
+                if (isAODMode || aodAlpha > 0f) {
                     AODScreen(
                         playerState = playerState,
                         albumArt = albumArt,
@@ -445,6 +1001,38 @@ class MainActivity : ComponentActivity() {
                         onNextTrack = { viewModel.skipToNext() },
                         onPreviousTrack = { viewModel.skipToPrevious() }
                     )
+                }
+            }
+
+            // Only show edit menu if edit mode is unlocked
+            if (editModeUnlocked) {
+                AnimatedVisibility(
+                    visible = selectedElement != null,
+                    enter = slideIn(
+                        initialOffset = { IntOffset(it.width, 0) },
+                        animationSpec = tween(300)
+                    ) + fadeIn(animationSpec = tween(200)),
+                    exit = slideOut(
+                        targetOffset = { IntOffset(it.width, 0) },
+                        animationSpec = tween(300)
+                    ) + fadeOut(animationSpec = tween(200))
+                ) {
+                    selectedElement?.let { element ->
+                        EditMenu(
+                            selectedElement = element,
+                            settings = when (element) {
+                                EditableElement.FONT_STYLE -> textSettings
+                                EditableElement.CONTROLS_STYLE -> controlsSettings
+                            },
+                            onSettingsChange = {
+                                when (element) {
+                                    EditableElement.FONT_STYLE -> textSettings = it as TextStyleSettings
+                                    EditableElement.CONTROLS_STYLE -> controlsSettings = it as ControlsStyleSettings
+                                }
+                            },
+                            onDismiss = { selectedElement = null }
+                        )
+                    }
                 }
             }
         }
@@ -567,47 +1155,66 @@ class MainActivity : ComponentActivity() {
         icon: ImageVector,
         contentDescription: String,
         onClick: () -> Unit,
-        size: Dp = 36.dp,
+        baseSize: Dp,
+        controlSettings: ControlsStyleSettings,
         modifier: Modifier = Modifier
     ) {
-        val interactionSource = remember { MutableInteractionSource() }
-        val isPressed = interactionSource.collectIsPressedAsState()
-        val localView = LocalView.current  // Get it directly here
+        val size = baseSize * controlSettings.size
+        val iconModifier = Modifier.size(size * 0.55f)
+        val cornerRadius = 50f * controlSettings.cornerRadius
 
-        val scale by animateFloatAsState(
-            targetValue = if (isPressed.value) 0.85f else 1f,
-            animationSpec = spring(
-                dampingRatio = 0.7f,
-                stiffness = 400f
-            ),
-            label = "scale"
-        )
-
-        val alpha by animateFloatAsState(
-            targetValue = if (isPressed.value) 0.7f else 1f,
-            animationSpec = tween(100),
-            label = "alpha"
-        )
-
-        IconButton(
-            onClick = {
-                localView.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-                onClick()
-            },
-            interactionSource = interactionSource,
-            modifier = modifier
-                .size(size)
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
+        when (controlSettings.style) {
+            ControlStyle.FILLED -> {
+                IconButton(
+                    onClick = onClick,
+                    modifier = modifier.size(size)
+                ) {
+                    Icon(
+                        imageVector = when (controlSettings.iconStyle) {
+                            IconStyle.REGULAR -> icon
+                            IconStyle.ROUNDED -> icon
+                            IconStyle.SHARP -> icon
+                        },
+                        contentDescription = contentDescription,
+                        tint = Color.White,
+                        modifier = iconModifier
+                    )
                 }
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = contentDescription,
-                tint = Color.White.copy(alpha = alpha),
-                modifier = Modifier.size(size * 0.8f)
-            )
+            }
+            ControlStyle.OUTLINED -> {
+                IconButton(
+                    onClick = onClick,
+                    modifier = modifier.size(size)
+                ) {
+                    Icon(
+                        imageVector = when (controlSettings.iconStyle) {
+                            IconStyle.REGULAR -> icon
+                            IconStyle.ROUNDED -> icon
+                            IconStyle.SHARP -> icon
+                        },
+                        contentDescription = contentDescription,
+                        tint = Color.White,
+                        modifier = iconModifier
+                    )
+                }
+            }
+            ControlStyle.MINIMAL -> {
+                IconButton(
+                    onClick = onClick,
+                    modifier = modifier.size(size)
+                ) {
+                    Icon(
+                        imageVector = when (controlSettings.iconStyle) {
+                            IconStyle.REGULAR -> icon
+                            IconStyle.ROUNDED -> icon
+                            IconStyle.SHARP -> icon
+                        },
+                        contentDescription = contentDescription,
+                        tint = Color.White,
+                        modifier = iconModifier
+                    )
+                }
+            }
         }
     }
 
@@ -694,5 +1301,64 @@ class MainActivity : ComponentActivity() {
                 scaleY = scale
             }
         )
+    }
+
+    @Composable
+    private fun StyleOption(
+        name: String,
+        isSelected: Boolean,
+        onClick: () -> Unit,
+        preview: @Composable () -> Unit
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.clickable(onClick = onClick)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        Color(0xFF2C2C2E).copy(alpha = 0.7f),
+                        RoundedCornerShape(12.dp)
+                    )
+                    .border(
+                        width = if (isSelected) 2.dp else 1.dp,
+                        color = if (isSelected) Color.White else Color.White.copy(0.3f),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+            ) {
+                // Enhanced blur overlay for preview
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = 0.1f),
+                                    Color.White.copy(alpha = 0.05f)
+                                )
+                            )
+                        )
+                )
+
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(8.dp)
+                ) {
+                    preview()
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = name,
+                fontSize = 13.sp,
+                color = Color.White.copy(alpha = 0.8f)
+            )
+        }
     }
 }
